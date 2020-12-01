@@ -45,6 +45,12 @@ impl Vec3 {
         }
     }
 
+    pub fn minus(&self, other: Vec3) -> Vec3 {
+        Vec3 {
+            data: [self[0] - other[0], self[1] - other[1], self[2] - other[2]],
+        }
+    }
+
     pub fn times(&self, t: f64) -> Vec3 {
         Vec3 {
             data: [self.data[0] * t, self.data[1] * t, self.data[2] * t],
@@ -115,8 +121,8 @@ pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
     }
 }
 
-pub fn unit_vector(v: Vec3) {
-    v.div(v.length());
+pub fn unit_vector(v: Vec3) -> Vec3 {
+    v.div(v.length())
 }
 
 pub type Color = Vec3;

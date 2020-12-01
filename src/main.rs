@@ -1,6 +1,7 @@
 mod vec3;
+use vec3::Color;
 
-pub fn write_color(pixel_color: vec3::Color) {
+pub fn write_color(pixel_color: Color) {
     println!(
         "{} {} {}",
         (255.999 * pixel_color.x()) as i32,

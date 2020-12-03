@@ -6,6 +6,7 @@ struct HitRecord {
     p: Point3,
     normal: Vec3,
     t: f64,
+    front_face: bool,
 }
 
 trait Hittable {
@@ -38,11 +39,19 @@ impl Hittable for Sphere {
                 return false;
             }
         }
-        let new_p = r.at(root);
+        let new_p = r.clone().at(root);
+        let outward_normal = (new_p.clone() - self.center) / self.radius;
+        let fface = dot(r.direction, outward_normal.clone()) < 0.0;
+        let new_normal = if fface {
+            outward_normal
+        } else {
+            -outward_normal
+        };
         *rec = HitRecord {
             t: root,
-            p: new_p.clone(),
-            normal: (new_p - self.center) / self.radius,
+            p: new_p,
+            normal: new_normal,
+            front_face: fface,
         };
         true
     }

@@ -1,4 +1,6 @@
 mod vec3;
+use std::f64::consts::PI;
+use std::f64::INFINITY;
 use vec3::*;
 //use vec3::{unit_vector, Color, Point3, Vec3};
 
@@ -14,6 +16,7 @@ trait Hittable {
     fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
 }
 
+#[derive(Clone)]
 struct Sphere {
     center: Point3,
     radius: f64,
@@ -127,15 +130,23 @@ fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
     }
 }
 
-fn ray_color(r: Ray) -> Color {
-    let t = hit_sphere(Point3::of(0.0, 0.0, -1.0), 0.5, r.clone());
-    if t > 0.0 {
-        let n = unit_vector(r.clone().at(t) - Vec3::of(0.0, 0.0, -1.0));
-        return Color::of(n.x() + 1.0, n.y() + 1.0, n.z() + 1.0) * 0.5;
+fn ray_color<T: Hittable>(r: Ray, world: T) -> Color {
+    let rec: &mut HitRecord = &mut HitRecord {
+        front_face: false,
+        normal: Vec3::new(),
+        p: Point3::new(),
+        t: 0.0,
+    };
+    if world.hit(r.clone(), 0.0, INFINITY, rec) {
+        return (rec.clone().normal + Color::of(1.0, 1.0, 1.0)) * 0.5;
     }
     let unit_direction = unit_vector(r.direction);
     let t = 0.5 * (unit_direction.y() + 1.0);
     return (Color::of(1.0, 1.0, 1.0) * (1.0 - t)) + (Color::of(0.5, 0.7, 1.0) * t);
+}
+
+fn degrees_to_radians(degrees: f64) -> f64 {
+    degrees * PI / 180.0
 }
 
 fn main() {
@@ -144,8 +155,19 @@ fn main() {
     let image_width = 400;
     let image_height = (image_width as f64 / aspect_ratio) as i32;
 
-    // Camera
+    // World
+    let mut world = vec![
+        Sphere {
+            center: Point3::of(0.0, 0.0, -1.0),
+            radius: 0.5,
+        },
+        Sphere {
+            center: Point3::of(0.0, -100.5, -1.0),
+            radius: 100.0,
+        },
+    ];
 
+    // Camera
     let viewport_height = 2.0;
     let viewport_width = aspect_ratio * viewport_height;
     let focal_length = 1.0;
@@ -164,6 +186,7 @@ fn main() {
         let j = image_height - j1 - 1;
         eprintln!("\rScanlines remaining {} ", j);
         for i in 0..image_width {
+            let world = world.as_mut_slice().to_vec();
             let u = i as f64 / (image_width - 1) as f64;
             let v = j as f64 / (image_height - 1) as f64;
             let r = Ray::of(
@@ -171,7 +194,7 @@ fn main() {
                 lower_left_corner.clone() + (horizontal.clone() * u) + (vertical.clone() * v)
                     - origin.clone(),
             );
-            let pixel_color = ray_color(r);
+            let pixel_color = ray_color(r, world);
             write_color(pixel_color);
         }
     }

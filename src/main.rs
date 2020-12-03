@@ -30,14 +30,14 @@ impl Ray {
         }
     }
     pub fn at(&self, t: f64) -> Point3 {
-        self.origin.plus(self.direction.times(t))
+        self.origin.clone() + (self.direction.clone() * t)
     }
 }
 
 fn ray_color(r: Ray) -> Color {
     let unit_direction = unit_vector(r.direction);
     let t = 0.5 * (unit_direction.y() + 1.0);
-    return vtimes(Color::of(1.0, 1.0, 1.0), 1.0 - t).plus(vtimes(Color::of(0.5, 0.7, 1.0), t));
+    return (Color::of(1.0, 1.0, 1.0) * (1.0 - t)) + (Color::of(0.5, 0.7, 1.0) * t);
 }
 
 fn main() {
@@ -55,10 +55,10 @@ fn main() {
     let origin = Point3::new();
     let horizontal = Vec3::of(viewport_width, 0.0, 0.0);
     let vertical = Vec3::of(0.0, viewport_height, 0.0);
-    let lower_left_corner = origin
-        .minus(horizontal.div(2.0))
-        .minus(vertical.div(2.0))
-        .minus(Vec3::of(0.0, 0.0, focal_length));
+    let lower_left_corner = origin.clone()
+        - (horizontal.clone() / 2.0)
+        - (vertical.clone() / 2.0)
+        - Vec3::of(0.0, 0.0, focal_length);
 
     println!("P3\n{} {}\n255", image_width, image_height);
 
@@ -69,11 +69,9 @@ fn main() {
             let u = i as f64 / (image_width - 1) as f64;
             let v = j as f64 / (image_height - 1) as f64;
             let r = Ray::of(
-                Point3::new(), // was origin, borrow after move
-                lower_left_corner
-                    .plus(horizontal.times(u))
-                    .plus(vertical.times(v))
-                    .minus(Point3::new()), // was origin, borrow after move
+                origin.clone(),
+                lower_left_corner.clone() + (horizontal.clone() * u) + (vertical.clone() * v)
+                    - origin.clone(),
             );
             let pixel_color = ray_color(r);
             write_color(pixel_color);

@@ -1,8 +1,8 @@
 use std::fmt;
-use std::ops::Index;
-
+use std::ops::{Add, Div, Index, Mul, Neg, Sub};
 // Vec3 implementation
 
+#[derive(Clone)]
 pub struct Vec3 {
     data: [f64; 3],
 }
@@ -29,38 +29,6 @@ impl Vec3 {
         self.data[2]
     }
 
-    pub fn neg(&self) -> Vec3 {
-        Vec3 {
-            data: [-self.data[0], -self.data[1], -self.data[2]],
-        }
-    }
-
-    pub fn plus(&self, other: Vec3) -> Vec3 {
-        Vec3 {
-            data: [
-                self.data[0] + other.data[0],
-                self.data[1] + other.data[1],
-                self.data[2] + other.data[2],
-            ],
-        }
-    }
-
-    pub fn minus(&self, other: Vec3) -> Vec3 {
-        Vec3 {
-            data: [self[0] - other[0], self[1] - other[1], self[2] - other[2]],
-        }
-    }
-
-    pub fn times(&self, t: f64) -> Vec3 {
-        Vec3 {
-            data: [self.data[0] * t, self.data[1] * t, self.data[2] * t],
-        }
-    }
-
-    pub fn div(&self, t: f64) -> Vec3 {
-        self.times(1.0 / t)
-    }
-
     pub fn length_squared(&self) -> f64 {
         (self.data[0] * self.data[0])
             + (self.data[1] * self.data[1])
@@ -85,26 +53,66 @@ impl fmt::Display for Vec3 {
     }
 }
 
+impl Add for Vec3 {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self {
+            data: [self[0] + other[0], self[1] + other[1], self[2] + other[2]],
+        }
+    }
+}
+
+impl Sub for Vec3 {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self {
+            data: [self[0] - other[0], self[1] - other[1], self[2] - other[2]],
+        }
+    }
+}
+
+impl Mul<f64> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, t: f64) -> Vec3 {
+        Vec3 {
+            data: [self.data[0] * t, self.data[1] * t, self.data[2] * t],
+        }
+    }
+}
+
+impl Div<f64> for Vec3 {
+    type Output = Vec3;
+    fn div(self, other: f64) -> Vec3 {
+        self * (1.0 / other)
+    }
+}
+
+impl Neg for Vec3 {
+    type Output = Self;
+    fn neg(self) -> Self {
+        Vec3 {
+            data: [-self.data[0], -self.data[1], -self.data[2]],
+        }
+    }
+}
+
 // Vec3 utility functions
 
 pub fn vplus(a: Vec3, b: Vec3) -> Vec3 {
-    Vec3 {
-        data: [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
-    }
+    a + b
 }
 
 pub fn vminus(a: Vec3, b: Vec3) -> Vec3 {
-    Vec3 {
-        data: [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
-    }
+    a - b
 }
 
 pub fn vtimes(a: Vec3, t: f64) -> Vec3 {
-    a.times(t)
+    a * t
 }
 
 pub fn vdiv(a: Vec3, t: f64) -> Vec3 {
-    a.div(t)
+    a / t
 }
 
 pub fn dot(a: Vec3, b: Vec3) -> f64 {
@@ -122,7 +130,7 @@ pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
 }
 
 pub fn unit_vector(v: Vec3) -> Vec3 {
-    v.div(v.length())
+    v.clone() / v.length()
 }
 
 pub type Color = Vec3;

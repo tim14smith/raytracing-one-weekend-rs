@@ -2,6 +2,52 @@ mod vec3;
 use vec3::*;
 //use vec3::{unit_vector, Color, Point3, Vec3};
 
+struct HitRecord {
+    p: Point3,
+    normal: Vec3,
+    t: f64,
+}
+
+trait Hittable {
+    fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
+}
+
+struct Sphere {
+    center: Point3,
+    radius: f64,
+}
+
+impl Hittable for Sphere {
+    fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
+        let oc = r.clone().origin - self.center.clone();
+        let a = r.clone().direction.length_squared();
+        let half_b = dot(oc.clone(), r.clone().direction);
+        let c = oc.length_squared() - self.radius * self.radius;
+
+        let discriminant = half_b * half_b - a * c;
+        if discriminant < 0.0 {
+            return false;
+        }
+        let sqrtd = discriminant.sqrt();
+
+        // Find the nearest root that lies in the acceptable range.
+        let mut root = (-half_b - sqrtd) / a;
+        if (root < t_min) || (t_max < root) {
+            root = (-half_b + sqrtd) / a;
+            if (root < t_min) || (t_max < root) {
+                return false;
+            }
+        }
+        let new_p = r.at(root);
+        *rec = HitRecord {
+            t: root,
+            p: new_p.clone(),
+            normal: (new_p - self.center) / self.radius,
+        };
+        true
+    }
+}
+
 pub fn write_color(pixel_color: Color) {
     println!(
         "{} {} {}",

@@ -7,34 +7,68 @@ use std::f64::INFINITY;
 use vec3::*;
 //use vec3::{unit_vector, Color, Point3, Vec3};
 
-#[derive(Clone)]
+struct Ray {
+    origin: Point3,
+    direction: Vec3,
+}
+
+impl Ray {
+    pub fn new() -> Ray {
+        Ray {
+            origin: Vec3::new(),
+            direction: Vec3::new(),
+        }
+    }
+    pub fn of(origin: Point3, direction: Vec3) -> Ray {
+        Ray {
+            origin: origin,
+            direction: direction,
+        }
+    }
+    pub fn at(&self, t: f64) -> Point3 {
+        &self.origin + &(&self.direction * t)
+    }
+}
+
 struct HitRecord {
     p: Point3,
     normal: Vec3,
     t: f64,
     front_face: bool,
+    hit: bool,
+}
+
+impl HitRecord {
+    fn default() -> HitRecord {
+        HitRecord {
+            p: Point3::new(),
+            normal: Vec3::new(),
+            t: 0.0,
+            front_face: false,
+            hit: false,
+        }
+    }
 }
 
 trait Hittable {
-    fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> HitRecord;
 }
 
-#[derive(Clone)]
 struct Sphere {
     center: Point3,
     radius: f64,
 }
 
 impl Hittable for Sphere {
-    fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
-        let oc = r.clone().origin - self.center.clone();
-        let a = r.clone().direction.length_squared();
-        let half_b = dot(oc.clone(), r.clone().direction);
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> HitRecord {
+        let oc = &r.origin - &self.center;
+        let a = r.direction.length_squared();
+        let half_b = dot(&oc, &r.direction);
         let c = oc.length_squared() - self.radius * self.radius;
 
         let discriminant = half_b * half_b - a * c;
         if discriminant < 0.0 {
-            return false;
+            return HitRecord::default();
         }
         let sqrtd = discriminant.sqrt();
 
@@ -43,47 +77,43 @@ impl Hittable for Sphere {
         if (root < t_min) || (t_max < root) {
             root = (-half_b + sqrtd) / a;
             if (root < t_min) || (t_max < root) {
-                return false;
+                return HitRecord::default();
             }
         }
-        let new_p = r.clone().at(root);
-        let outward_normal = (new_p.clone() - self.center) / self.radius;
-        let fface = dot(r.direction, outward_normal.clone()) < 0.0;
+        let new_p = r.at(root);
+        let outward_normal = &(&new_p - &self.center) / self.radius;
+        let fface = dot(&r.direction, &outward_normal) < 0.0;
         let new_normal = if fface {
             outward_normal
         } else {
-            -outward_normal
+            -&outward_normal
         };
-        *rec = HitRecord {
+        HitRecord {
             t: root,
             p: new_p,
             normal: new_normal,
             front_face: fface,
-        };
-        true
+            hit: true,
+        }
     }
 }
 
-impl<T: Hittable> Hittable for Vec<T> {
-    fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
-        let temp_rec: &mut HitRecord = &mut HitRecord {
-            front_face: false,
-            normal: Vec3::new(),
-            p: Point3::new(),
-            t: 0.0,
-        };
+impl<'a, T: Hittable> Hittable for &'a Vec<T> {
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> HitRecord {
         let mut hit_anything = false;
         let mut closest_so_far = t_max;
+        let mut rec = HitRecord::default();
 
-        for x in self {
-            if x.hit(r.clone(), t_min, closest_so_far, temp_rec) {
+        for x in *self {
+            let hr = x.hit(&r, t_min, closest_so_far);
+            if hr.hit {
                 hit_anything = true;
-                closest_so_far = temp_rec.t;
-                *rec = temp_rec.clone();
+                closest_so_far = hr.t;
+                rec = hr;
             }
         }
 
-        hit_anything
+        rec
     }
 }
 
@@ -110,34 +140,10 @@ pub fn write_color(pixel_color: Color, samples_per_pixel: u32) {
     );
 }
 
-#[derive(Clone)]
-struct Ray {
-    origin: Point3,
-    direction: Vec3,
-}
-
-impl Ray {
-    pub fn new() -> Ray {
-        Ray {
-            origin: Vec3::new(),
-            direction: Vec3::new(),
-        }
-    }
-    pub fn of(origin: Point3, direction: Vec3) -> Ray {
-        Ray {
-            origin: origin,
-            direction: direction,
-        }
-    }
-    pub fn at(&self, t: f64) -> Point3 {
-        self.origin.clone() + (self.direction.clone() * t)
-    }
-}
-
 fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
-    let oc = r.clone().origin - center;
-    let a = r.clone().direction.length_squared();
-    let half_b = dot(oc.clone(), r.direction);
+    let oc = &r.origin - &center;
+    let a = r.direction.length_squared();
+    let half_b = dot(&oc, &r.direction);
     let c = oc.length_squared() - radius * radius;
     let discriminant = half_b * half_b - a * c;
     if discriminant < 0.0 {
@@ -148,18 +154,13 @@ fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
 }
 
 fn ray_color<T: Hittable>(r: Ray, world: T) -> Color {
-    let rec: &mut HitRecord = &mut HitRecord {
-        front_face: false,
-        normal: Vec3::new(),
-        p: Point3::new(),
-        t: 0.0,
-    };
-    if world.hit(r.clone(), 0.0, INFINITY, rec) {
-        return (rec.clone().normal + Color::of(1.0, 1.0, 1.0)) * 0.5;
+    let rec = world.hit(&r, 0.0, INFINITY);
+    if rec.hit {
+        return &(&rec.normal + &Color::of(1.0, 1.0, 1.0)) * 0.5;
     }
-    let unit_direction = unit_vector(r.direction);
+    let unit_direction = unit_vector(&r.direction);
     let t = 0.5 * (unit_direction.y() + 1.0);
-    return (Color::of(1.0, 1.0, 1.0) * (1.0 - t)) + (Color::of(0.5, 0.7, 1.0) * t);
+    return &(&Color::of(1.0, 1.0, 1.0) * (1.0 - t)) + &(&Color::of(0.5, 0.7, 1.0) * t);
 }
 
 fn degrees_to_radians(degrees: f64) -> f64 {
@@ -170,7 +171,6 @@ fn random_f64() -> f64 {
     thread_rng().gen_range(0.0, 1.0)
 }
 
-#[derive(Clone)]
 struct Camera {
     origin: Point3,
     lower_left_corner: Point3,
@@ -188,22 +188,20 @@ impl Camera {
         let horizontal = Vec3::of(viewport_width, 0.0, 0.0);
         let vertical = Vec3::of(0.0, viewport_height, 0.0);
         Camera {
-            origin: origin.clone(),
-            horizontal: horizontal.clone(),
-            vertical: vertical.clone(),
-            lower_left_corner: origin
-                - (horizontal / 2.0)
-                - (vertical / 2.0)
-                - Vec3::of(0.0, 0.0, focal_length),
+            origin: Point3::new(),
+            horizontal: Vec3::of(viewport_width, 0.0, 0.0),
+            vertical: Vec3::of(0.0, viewport_height, 0.0),
+            lower_left_corner: &(&(&origin - &(&horizontal / 2.0)) - &(&vertical / 2.0))
+                - &Vec3::of(0.0, 0.0, focal_length),
         }
     }
+}
 
-    pub fn get_ray(self, u: f64, v: f64) -> Ray {
-        return Ray {
-            origin: self.origin.clone(),
-            direction: self.lower_left_corner + self.horizontal * u + self.vertical * v
-                - self.origin,
-        };
+fn get_ray(cam: &Camera, u: f64, v: f64) -> Ray {
+    Ray {
+        origin: cam.origin.clone(),
+        direction: &(&(&cam.lower_left_corner + &(&cam.horizontal * u)) + &(&cam.vertical * v))
+            - &cam.origin,
     }
 }
 
@@ -215,7 +213,7 @@ fn main() {
     let samples_per_pixel = 100;
 
     // World
-    let mut world = vec![
+    let world = vec![
         Sphere {
             center: Point3::of(0.0, 0.0, -1.0),
             radius: 0.5,
@@ -239,8 +237,8 @@ fn main() {
             for _ in 0..samples_per_pixel {
                 let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
                 let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
-                let r = cam.clone().get_ray(u, v);
-                pixel_color = pixel_color + ray_color(r, world.clone());
+                let r = get_ray(&cam, u, v);
+                pixel_color = &pixel_color + &ray_color(r, &world);
             }
             write_color(pixel_color, samples_per_pixel);
             // let world = world.as_mut_slice().to_vec();

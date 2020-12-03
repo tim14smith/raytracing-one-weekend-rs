@@ -53,25 +53,25 @@ impl fmt::Display for Vec3 {
     }
 }
 
-impl Add for Vec3 {
-    type Output = Self;
-    fn add(self, other: Self) -> Self {
-        Self {
+impl<'a, 'b> Add<&'b Vec3> for &'a Vec3 {
+    type Output = Vec3;
+    fn add(self, other: &'b Vec3) -> Vec3 {
+        Vec3 {
             data: [self[0] + other[0], self[1] + other[1], self[2] + other[2]],
         }
     }
 }
 
-impl Sub for Vec3 {
-    type Output = Self;
-    fn sub(self, other: Self) -> Self {
-        Self {
+impl<'a, 'b> Sub<&'b Vec3> for &'a Vec3 {
+    type Output = Vec3;
+    fn sub(self, other: &'b Vec3) -> Vec3 {
+        Vec3 {
             data: [self[0] - other[0], self[1] - other[1], self[2] - other[2]],
         }
     }
 }
 
-impl Mul<f64> for Vec3 {
+impl<'a> Mul<f64> for &'a Vec3 {
     type Output = Vec3;
 
     fn mul(self, t: f64) -> Vec3 {
@@ -81,16 +81,16 @@ impl Mul<f64> for Vec3 {
     }
 }
 
-impl Div<f64> for Vec3 {
+impl<'a> Div<f64> for &'a Vec3 {
     type Output = Vec3;
     fn div(self, other: f64) -> Vec3 {
         self * (1.0 / other)
     }
 }
 
-impl Neg for Vec3 {
-    type Output = Self;
-    fn neg(self) -> Self {
+impl<'a> Neg for &'a Vec3 {
+    type Output = Vec3;
+    fn neg(self) -> Vec3 {
         Vec3 {
             data: [-self.data[0], -self.data[1], -self.data[2]],
         }
@@ -99,27 +99,27 @@ impl Neg for Vec3 {
 
 // Vec3 utility functions
 
-pub fn vplus(a: Vec3, b: Vec3) -> Vec3 {
+pub fn vplus(a: &Vec3, b: &Vec3) -> Vec3 {
     a + b
 }
 
-pub fn vminus(a: Vec3, b: Vec3) -> Vec3 {
+pub fn vminus(a: &Vec3, b: &Vec3) -> Vec3 {
     a - b
 }
 
-pub fn vtimes(a: Vec3, t: f64) -> Vec3 {
+pub fn vtimes(a: &Vec3, t: f64) -> Vec3 {
     a * t
 }
 
-pub fn vdiv(a: Vec3, t: f64) -> Vec3 {
+pub fn vdiv(a: &Vec3, t: f64) -> Vec3 {
     a / t
 }
 
-pub fn dot(a: Vec3, b: Vec3) -> f64 {
+pub fn dot(a: &Vec3, b: &Vec3) -> f64 {
     (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2])
 }
 
-pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
+pub fn cross(a: &Vec3, b: &Vec3) -> Vec3 {
     Vec3 {
         data: [
             a[1] * b[2] - a[2] * b[1],
@@ -129,8 +129,8 @@ pub fn cross(a: Vec3, b: Vec3) -> Vec3 {
     }
 }
 
-pub fn unit_vector(v: Vec3) -> Vec3 {
-    v.clone() / v.length()
+pub fn unit_vector(v: &Vec3) -> Vec3 {
+    v / v.length()
 }
 
 pub type Color = Vec3;

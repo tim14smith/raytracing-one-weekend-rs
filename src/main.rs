@@ -1,4 +1,7 @@
+extern crate rand;
 mod vec3;
+use rand::prelude::*;
+use rand::thread_rng;
 use std::f64::consts::PI;
 use std::f64::INFINITY;
 use vec3::*;
@@ -84,12 +87,26 @@ impl<T: Hittable> Hittable for Vec<T> {
     }
 }
 
-pub fn write_color(pixel_color: Color) {
+pub fn clamp(x: f64, min: f64, max: f64) -> f64 {
+    if x < min {
+        min
+    } else if x > max {
+        max
+    } else {
+        x
+    }
+}
+
+pub fn write_color(pixel_color: Color, samples_per_pixel: u32) {
+    let scale = 1.0 / (samples_per_pixel as f64);
+    let r = pixel_color.x() * scale;
+    let g = pixel_color.y() * scale;
+    let b = pixel_color.z() * scale;
     println!(
         "{} {} {}",
-        (255.999 * pixel_color.x()) as i32,
-        (255.999 * pixel_color.y()) as i32,
-        (255.999 * pixel_color.z()) as i32
+        (256.0 * clamp(r, 0.0, 0.999)) as i32,
+        (256.0 * clamp(g, 0.0, 0.999)) as i32,
+        (256.0 * clamp(b, 0.0, 0.999)) as i32
     );
 }
 
@@ -149,11 +166,53 @@ fn degrees_to_radians(degrees: f64) -> f64 {
     degrees * PI / 180.0
 }
 
+fn random_f64() -> f64 {
+    thread_rng().gen_range(0.0, 1.0)
+}
+
+#[derive(Clone)]
+struct Camera {
+    origin: Point3,
+    lower_left_corner: Point3,
+    horizontal: Vec3,
+    vertical: Vec3,
+}
+
+impl Camera {
+    pub fn new() -> Camera {
+        let aspect_ratio = 16.0 / 9.0;
+        let viewport_height = 2.0;
+        let viewport_width = aspect_ratio * viewport_height;
+        let focal_length = 1.0;
+        let origin = Point3::new();
+        let horizontal = Vec3::of(viewport_width, 0.0, 0.0);
+        let vertical = Vec3::of(0.0, viewport_height, 0.0);
+        Camera {
+            origin: origin.clone(),
+            horizontal: horizontal.clone(),
+            vertical: vertical.clone(),
+            lower_left_corner: origin
+                - (horizontal / 2.0)
+                - (vertical / 2.0)
+                - Vec3::of(0.0, 0.0, focal_length),
+        }
+    }
+
+    pub fn get_ray(self, u: f64, v: f64) -> Ray {
+        return Ray {
+            origin: self.origin.clone(),
+            direction: self.lower_left_corner + self.horizontal * u + self.vertical * v
+                - self.origin,
+        };
+    }
+}
+
 fn main() {
     // Image
     let aspect_ratio = 16.0 / 9.0;
     let image_width = 400;
     let image_height = (image_width as f64 / aspect_ratio) as i32;
+    let samples_per_pixel = 100;
 
     // World
     let mut world = vec![
@@ -168,17 +227,7 @@ fn main() {
     ];
 
     // Camera
-    let viewport_height = 2.0;
-    let viewport_width = aspect_ratio * viewport_height;
-    let focal_length = 1.0;
-
-    let origin = Point3::new();
-    let horizontal = Vec3::of(viewport_width, 0.0, 0.0);
-    let vertical = Vec3::of(0.0, viewport_height, 0.0);
-    let lower_left_corner = origin.clone()
-        - (horizontal.clone() / 2.0)
-        - (vertical.clone() / 2.0)
-        - Vec3::of(0.0, 0.0, focal_length);
+    let cam = Camera::new();
 
     println!("P3\n{} {}\n255", image_width, image_height);
 
@@ -186,16 +235,24 @@ fn main() {
         let j = image_height - j1 - 1;
         eprintln!("\rScanlines remaining {} ", j);
         for i in 0..image_width {
-            let world = world.as_mut_slice().to_vec();
-            let u = i as f64 / (image_width - 1) as f64;
-            let v = j as f64 / (image_height - 1) as f64;
-            let r = Ray::of(
-                origin.clone(),
-                lower_left_corner.clone() + (horizontal.clone() * u) + (vertical.clone() * v)
-                    - origin.clone(),
-            );
-            let pixel_color = ray_color(r, world);
-            write_color(pixel_color);
+            let mut pixel_color = Color::of(0.0, 0.0, 0.0);
+            for _ in 0..samples_per_pixel {
+                let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
+                let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
+                let r = cam.clone().get_ray(u, v);
+                pixel_color = pixel_color + ray_color(r, world.clone());
+            }
+            write_color(pixel_color, samples_per_pixel);
+            // let world = world.as_mut_slice().to_vec();
+            // let u = i as f64 / (image_width - 1) as f64;
+            // let v = j as f64 / (image_height - 1) as f64;
+            // let r = Ray::of(
+            //     origin.clone(),
+            //     lower_left_corner.clone() + (horizontal.clone() * u) + (vertical.clone() * v)
+            //         - origin.clone(),
+            // );
+            // let pixel_color = ray_color(r, world);
+            // write_color(pixel_color);
         }
     }
     eprintln!("Done.\n");

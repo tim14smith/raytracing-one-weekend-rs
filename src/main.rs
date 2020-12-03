@@ -60,7 +60,7 @@ impl Hittable for Sphere {
 
 impl<T: Hittable> Hittable for Vec<T> {
     fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
-        let mut temp_rec: &mut HitRecord = &mut HitRecord {
+        let temp_rec: &mut HitRecord = &mut HitRecord {
             front_face: false,
             normal: Vec3::new(),
             p: Point3::new(),

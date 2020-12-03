@@ -11,6 +11,7 @@ pub fn write_color(pixel_color: Color) {
     );
 }
 
+#[derive(Clone)]
 struct Ray {
     origin: Point3,
     direction: Vec3,
@@ -34,7 +35,19 @@ impl Ray {
     }
 }
 
+fn hit_sphere(center: Point3, radius: f64, r: Ray) -> bool {
+    let oc = r.clone().origin - center;
+    let a = dot(r.clone().direction, r.clone().direction);
+    let b = 2.0 * dot(oc.clone(), r.direction);
+    let c = dot(oc.clone(), oc) - radius * radius;
+    let discriminant = b * b - 4.0 * a * c;
+    discriminant > 0.0
+}
+
 fn ray_color(r: Ray) -> Color {
+    if hit_sphere(Point3::of(0.0, 0.0, -1.0), 0.5, r.clone()) {
+        return Color::of(1.0, 0.0, 0.0);
+    }
     let unit_direction = unit_vector(r.direction);
     let t = 0.5 * (unit_direction.y() + 1.0);
     return (Color::of(1.0, 1.0, 1.0) * (1.0 - t)) + (Color::of(0.5, 0.7, 1.0) * t);

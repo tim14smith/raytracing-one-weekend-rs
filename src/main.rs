@@ -2,6 +2,7 @@ mod vec3;
 use vec3::*;
 //use vec3::{unit_vector, Color, Point3, Vec3};
 
+#[derive(Clone)]
 struct HitRecord {
     p: Point3,
     normal: Vec3,
@@ -54,6 +55,29 @@ impl Hittable for Sphere {
             front_face: fface,
         };
         true
+    }
+}
+
+impl<T: Hittable> Hittable for Vec<T> {
+    fn hit(self, r: Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
+        let mut temp_rec: &mut HitRecord = &mut HitRecord {
+            front_face: false,
+            normal: Vec3::new(),
+            p: Point3::new(),
+            t: 0.0,
+        };
+        let mut hit_anything = false;
+        let mut closest_so_far = t_max;
+
+        for x in self {
+            if x.hit(r.clone(), t_min, closest_so_far, temp_rec) {
+                hit_anything = true;
+                closest_so_far = temp_rec.t;
+                *rec = temp_rec.clone();
+            }
+        }
+
+        hit_anything
     }
 }
 

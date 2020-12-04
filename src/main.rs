@@ -85,6 +85,16 @@ impl Material for Lambertian {
 #[derive(Clone, Copy)]
 struct Metal {
     albedo: Color,
+    fuzz: f64,
+}
+
+impl Metal {
+    fn new(a: Color, f: f64) -> Metal {
+        Metal {
+            albedo: a,
+            fuzz: if f < 1.0 { f } else { 1.0 },
+        }
+    }
 }
 
 impl Material for Metal {
@@ -96,7 +106,7 @@ impl Material for Metal {
         scattered: &mut Ray,
     ) -> bool {
         let reflected = reflect(&unit_vector(&r_in.direction), &rec.normal);
-        *scattered = Ray::of(rec.p, reflected);
+        *scattered = Ray::of(rec.p, reflected + (Vec3::rand_in_unit_sphere() * self.fuzz));
         *attenuation = self.albedo;
         dot(&scattered.direction, &rec.normal) > 0.0
     }
@@ -337,12 +347,8 @@ fn main() {
                 let material_center = Lambertian {
                     albedo: Color::of(0.7, 0.3, 0.3),
                 };
-                let material_left = Metal {
-                    albedo: Color::of(0.8, 0.8, 0.8),
-                };
-                let material_right = Metal {
-                    albedo: Color::of(0.8, 0.6, 0.2),
-                };
+                let material_left = Metal::new(Color::of(0.8, 0.8, 0.8), 0.3);
+                let material_right = Metal::new(Color::of(0.8, 0.6, 0.2), 1.0);
                 let world = vec![
                     Sphere {
                         center: Point3::of(0.0, -100.5, -1.0),

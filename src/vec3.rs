@@ -1,5 +1,16 @@
+use rand::prelude::*;
+use rand::thread_rng;
 use std::fmt;
 use std::ops::{Add, Div, Index, Mul, Neg, Sub};
+
+pub fn random_f64() -> f64 {
+    thread_rng().gen_range(0.0, 1.0)
+}
+
+pub fn random_float(min: f64, max: f64) -> f64 {
+    thread_rng().gen_range(min, max)
+}
+
 // Vec3 implementation
 
 #[derive(Clone)]
@@ -37,6 +48,27 @@ impl Vec3 {
 
     pub fn length(&self) -> f64 {
         self.length_squared().sqrt()
+    }
+
+    pub fn rand() -> Vec3 {
+        Vec3::of(random_f64(), random_f64(), random_f64())
+    }
+
+    pub fn rand_range(min: f64, max: f64) -> Vec3 {
+        Vec3::of(
+            random_float(min, max),
+            random_float(min, max),
+            random_float(min, max),
+        )
+    }
+
+    pub fn rand_in_unit_sphere() -> Vec3 {
+        loop {
+            let p = Vec3::rand_range(-1.0, 1.0);
+            if p.length_squared() < 1.0 {
+                return p;
+            }
+        }
     }
 }
 

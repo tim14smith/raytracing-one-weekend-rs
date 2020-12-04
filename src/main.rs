@@ -1,7 +1,5 @@
 extern crate rand;
 mod vec3;
-use rand::prelude::*;
-use rand::thread_rng;
 use std::f64::consts::PI;
 use std::f64::INFINITY;
 use vec3::*;
@@ -129,9 +127,9 @@ pub fn clamp(x: f64, min: f64, max: f64) -> f64 {
 
 pub fn write_color(pixel_color: Color, samples_per_pixel: u32) {
     let scale = 1.0 / (samples_per_pixel as f64);
-    let r = pixel_color.x() * scale;
-    let g = pixel_color.y() * scale;
-    let b = pixel_color.z() * scale;
+    let r = (pixel_color.x() * scale).sqrt();
+    let g = (pixel_color.y() * scale).sqrt();
+    let b = (pixel_color.z() * scale).sqrt();
     println!(
         "{} {} {}",
         (256.0 * clamp(r, 0.0, 0.999)) as i32,
@@ -153,10 +151,14 @@ fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
     }
 }
 
-fn ray_color<T: Hittable>(r: Ray, world: T) -> Color {
-    let rec = world.hit(&r, 0.0, INFINITY);
+fn ray_color<T: Hittable>(r: Ray, world: T, depth: u32) -> Color {
+    if depth <= 0 {
+        return Color::of(0.0, 0.0, 0.0);
+    }
+    let rec = world.hit(&r, 0.001, INFINITY);
     if rec.hit {
-        return (&rec.normal + &Color::of(1.0, 1.0, 1.0)) * 0.5;
+        let target = &rec.p + &rec.normal + Vec3::rand_in_unit_sphere();
+        return ray_color(Ray::of(rec.p.clone(), target - &rec.p), world, depth - 1) * 0.5;
     }
     let unit_direction = unit_vector(&r.direction);
     let t = 0.5 * (unit_direction.y() + 1.0);
@@ -165,10 +167,6 @@ fn ray_color<T: Hittable>(r: Ray, world: T) -> Color {
 
 fn degrees_to_radians(degrees: f64) -> f64 {
     degrees * PI / 180.0
-}
-
-fn random_f64() -> f64 {
-    thread_rng().gen_range(0.0, 1.0)
 }
 
 struct Camera {
@@ -213,6 +211,7 @@ fn main() {
     let image_width = 400;
     let image_height = (image_width as f64 / aspect_ratio) as i32;
     let samples_per_pixel = 100;
+    let max_depth = 50;
 
     // World
     let world = vec![
@@ -240,7 +239,7 @@ fn main() {
                 let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
                 let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
                 let r = get_ray(&cam, u, v);
-                pixel_color = &pixel_color + &ray_color(r, &world);
+                pixel_color = &pixel_color + &ray_color(r, &world, max_depth);
             }
             write_color(pixel_color, samples_per_pixel);
             // let world = world.as_mut_slice().to_vec();

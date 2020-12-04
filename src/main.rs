@@ -26,7 +26,7 @@ impl Ray {
         }
     }
     pub fn at(&self, t: f64) -> Point3 {
-        &self.origin + &(&self.direction * t)
+        &self.origin + (&self.direction * t)
     }
 }
 
@@ -81,7 +81,7 @@ impl Hittable for Sphere {
             }
         }
         let new_p = r.at(root);
-        let outward_normal = &(&new_p - &self.center) / self.radius;
+        let outward_normal = (&new_p - &self.center) / self.radius;
         let fface = dot(&r.direction, &outward_normal) < 0.0;
         let new_normal = if fface {
             outward_normal
@@ -156,11 +156,11 @@ fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
 fn ray_color<T: Hittable>(r: Ray, world: T) -> Color {
     let rec = world.hit(&r, 0.0, INFINITY);
     if rec.hit {
-        return &(&rec.normal + &Color::of(1.0, 1.0, 1.0)) * 0.5;
+        return (&rec.normal + &Color::of(1.0, 1.0, 1.0)) * 0.5;
     }
     let unit_direction = unit_vector(&r.direction);
     let t = 0.5 * (unit_direction.y() + 1.0);
-    return &(&Color::of(1.0, 1.0, 1.0) * (1.0 - t)) + &(&Color::of(0.5, 0.7, 1.0) * t);
+    return (&Color::of(1.0, 1.0, 1.0) * (1.0 - t)) + (&Color::of(0.5, 0.7, 1.0) * t);
 }
 
 fn degrees_to_radians(degrees: f64) -> f64 {
@@ -191,7 +191,9 @@ impl Camera {
             origin: Point3::new(),
             horizontal: Vec3::of(viewport_width, 0.0, 0.0),
             vertical: Vec3::of(0.0, viewport_height, 0.0),
-            lower_left_corner: &(&(&origin - &(&horizontal / 2.0)) - &(&vertical / 2.0))
+            lower_left_corner: &origin
+                - (&horizontal / 2.0)
+                - (&vertical / 2.0)
                 - &Vec3::of(0.0, 0.0, focal_length),
         }
     }
@@ -200,7 +202,7 @@ impl Camera {
 fn get_ray(cam: &Camera, u: f64, v: f64) -> Ray {
     Ray {
         origin: cam.origin.clone(),
-        direction: &(&(&cam.lower_left_corner + &(&cam.horizontal * u)) + &(&cam.vertical * v))
+        direction: &cam.lower_left_corner + (&cam.horizontal * u) + (&cam.vertical * v)
             - &cam.origin,
     }
 }

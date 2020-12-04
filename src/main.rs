@@ -2,6 +2,7 @@ extern crate rand;
 mod vec3;
 use std::f64::consts::PI;
 use std::f64::INFINITY;
+use std::option::Option;
 use vec3::*;
 //use vec3::{unit_vector, Color, Point3, Vec3};
 
@@ -28,12 +29,88 @@ impl Ray {
     }
 }
 
+trait MatClone {
+    fn clone_box(&self) -> Box<dyn Material>;
+}
+
+impl<T> MatClone for T
+where
+    T: 'static + Material + Clone,
+{
+    fn clone_box(&self) -> Box<dyn Material> {
+        Box::new(self.clone())
+    }
+}
+
+// We can now implement Clone manually by forwarding to clone_box.
+impl Clone for Box<dyn Material> {
+    fn clone(&self) -> Box<dyn Material> {
+        self.clone_box()
+    }
+}
+
+trait Material: MatClone {
+    fn scatter(
+        &self,
+        r_in: &Ray,
+        rec: &HitRecord,
+        attenuation: &mut Color,
+        scattered: &mut Ray,
+    ) -> bool;
+}
+
+#[derive(Clone, Copy)]
+struct Lambertian {
+    albedo: Color,
+}
+
+impl Material for Lambertian {
+    fn scatter(
+        &self,
+        _r_in: &Ray,
+        rec: &HitRecord,
+        attenuation: &mut Color,
+        scattered: &mut Ray,
+    ) -> bool {
+        let mut scatter_direction = rec.normal + Vec3::rand_unit_vector();
+        if scatter_direction.near_zero() {
+            scatter_direction = rec.normal;
+        }
+        *scattered = Ray::of(rec.p, scatter_direction);
+        *attenuation = self.albedo;
+        return true;
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Metal {
+    albedo: Color,
+}
+
+impl Material for Metal {
+    fn scatter(
+        &self,
+        r_in: &Ray,
+        rec: &HitRecord,
+        attenuation: &mut Color,
+        scattered: &mut Ray,
+    ) -> bool {
+        let reflected = reflect(&unit_vector(&r_in.direction), &rec.normal);
+        *scattered = Ray::of(rec.p, reflected);
+        *attenuation = self.albedo;
+        dot(&scattered.direction, &rec.normal) > 0.0
+    }
+}
+
+type MatPtr = Option<Box<dyn Material>>;
+
+#[derive(Clone)]
 struct HitRecord {
     p: Point3,
     normal: Vec3,
+    mat_ptr: MatPtr,
     t: f64,
     front_face: bool,
-    hit: bool,
 }
 
 impl HitRecord {
@@ -41,24 +118,36 @@ impl HitRecord {
         HitRecord {
             p: Point3::new(),
             normal: Vec3::new(),
+            mat_ptr: None,
             t: 0.0,
             front_face: false,
-            hit: false,
         }
     }
 }
 
 trait Hittable {
-    fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> HitRecord;
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
 }
 
+#[derive(Clone)]
 struct Sphere {
     center: Point3,
     radius: f64,
+    mat_ptr: MatPtr,
+}
+
+impl Sphere {
+    pub fn of(cen: Point3, radius: f64, mat_ptr: MatPtr) -> Sphere {
+        Sphere {
+            center: cen,
+            radius: radius,
+            mat_ptr: mat_ptr,
+        }
+    }
 }
 
 impl Hittable for Sphere {
-    fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> HitRecord {
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
         let oc = &r.origin - &self.center;
         let a = r.direction.length_squared();
         let half_b = dot(&oc, &r.direction);
@@ -66,7 +155,7 @@ impl Hittable for Sphere {
 
         let discriminant = half_b * half_b - a * c;
         if discriminant < 0.0 {
-            return HitRecord::default();
+            return false;
         }
         let sqrtd = discriminant.sqrt();
 
@@ -75,7 +164,7 @@ impl Hittable for Sphere {
         if (root < t_min) || (t_max < root) {
             root = (-half_b + sqrtd) / a;
             if (root < t_min) || (t_max < root) {
-                return HitRecord::default();
+                return false;
             }
         }
         let new_p = r.at(root);
@@ -86,32 +175,34 @@ impl Hittable for Sphere {
         } else {
             -&outward_normal
         };
-        HitRecord {
+
+        *rec = HitRecord {
             t: root,
             p: new_p,
+            mat_ptr: self.mat_ptr.clone(),
             normal: new_normal,
             front_face: fface,
-            hit: true,
-        }
+        };
+        true
     }
 }
 
-impl<'a, T: Hittable> Hittable for &'a Vec<T> {
-    fn hit(&self, r: &Ray, t_min: f64, t_max: f64) -> HitRecord {
+impl<T: Hittable> Hittable for Vec<T> {
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
         let mut hit_anything = false;
         let mut closest_so_far = t_max;
-        let mut rec = HitRecord::default();
 
-        for x in *self {
-            let hr = x.hit(&r, t_min, closest_so_far);
-            if hr.hit {
+        for x in self {
+            let temp_rec = &mut HitRecord::default();
+            let hit = x.hit(&r, t_min, closest_so_far, temp_rec);
+            if hit {
                 hit_anything = true;
-                closest_so_far = hr.t;
-                rec = hr;
+                closest_so_far = temp_rec.t;
+                *rec = temp_rec.clone();
             }
         }
 
-        rec
+        hit_anything
     }
 }
 
@@ -152,13 +243,27 @@ fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
 }
 
 fn ray_color<T: Hittable>(r: Ray, world: T, depth: u32) -> Color {
+    let rec: &mut HitRecord = &mut HitRecord::default();
+
     if depth <= 0 {
         return Color::of(0.0, 0.0, 0.0);
     }
-    let rec = world.hit(&r, 0.001, INFINITY);
-    if rec.hit {
-        let target = &rec.p + Vec3::random_in_hemisphere(&rec.normal);
-        return ray_color(Ray::of(rec.p.clone(), target - &rec.p), world, depth - 1) * 0.5;
+
+    if world.hit(&r, 0.001, INFINITY, rec) {
+        let mut scattered = Ray::new();
+        let mut attenuation = Color::new();
+        let mat = rec.clone().mat_ptr;
+        match mat {
+            None => {
+                println!("NO MATERIAL for {}, {}", r.origin, r.direction);
+            }
+            Some(x) => {
+                if x.scatter(&r, &rec, &mut attenuation, &mut scattered) {
+                    return attenuation * ray_color(scattered, world, depth - 1);
+                }
+            }
+        }
+        return Color::of(0.0, 0.0, 0.0);
     }
     let unit_direction = unit_vector(&r.direction);
     let t = 0.5 * (unit_direction.y() + 1.0);
@@ -182,6 +287,7 @@ impl Camera {
         let viewport_height = 2.0;
         let viewport_width = aspect_ratio * viewport_height;
         let focal_length = 1.0;
+
         let origin = Point3::new();
         let horizontal = Vec3::of(viewport_width, 0.0, 0.0);
         let vertical = Vec3::of(0.0, viewport_height, 0.0);
@@ -213,18 +319,6 @@ fn main() {
     let samples_per_pixel = 100;
     let max_depth = 50;
 
-    // World
-    let world = vec![
-        Sphere {
-            center: Point3::of(0.0, 0.0, -1.0),
-            radius: 0.5,
-        },
-        Sphere {
-            center: Point3::of(0.0, -100.5, -1.0),
-            radius: 100.0,
-        },
-    ];
-
     // Camera
     let cam = Camera::new();
 
@@ -236,10 +330,45 @@ fn main() {
         for i in 0..image_width {
             let mut pixel_color = Color::of(0.0, 0.0, 0.0);
             for _ in 0..samples_per_pixel {
+                // World
+                let material_ground = Lambertian {
+                    albedo: Color::of(0.8, 0.8, 0.0),
+                };
+                let material_center = Lambertian {
+                    albedo: Color::of(0.7, 0.3, 0.3),
+                };
+                let material_left = Metal {
+                    albedo: Color::of(0.8, 0.8, 0.8),
+                };
+                let material_right = Metal {
+                    albedo: Color::of(0.8, 0.6, 0.2),
+                };
+                let world = vec![
+                    Sphere {
+                        center: Point3::of(0.0, -100.5, -1.0),
+                        radius: 100.0,
+                        mat_ptr: Some(Box::new(material_ground)),
+                    },
+                    Sphere {
+                        center: Point3::of(0.0, 0.0, -1.0),
+                        radius: 0.5,
+                        mat_ptr: Some(Box::new(material_center)),
+                    },
+                    Sphere {
+                        center: Point3::of(-1.0, 0.0, -1.0),
+                        radius: 0.5,
+                        mat_ptr: Some(Box::new(material_left)),
+                    },
+                    Sphere {
+                        center: Point3::of(1.0, 0.0, -1.0),
+                        radius: 0.5,
+                        mat_ptr: Some(Box::new(material_right)),
+                    },
+                ];
                 let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
                 let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
                 let r = get_ray(&cam, u, v);
-                pixel_color = &pixel_color + &ray_color(r, &world, max_depth);
+                pixel_color = &pixel_color + &ray_color(r, world, max_depth);
             }
             write_color(pixel_color, samples_per_pixel);
         }

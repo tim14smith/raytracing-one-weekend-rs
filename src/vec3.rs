@@ -13,7 +13,7 @@ pub fn random_float(min: f64, max: f64) -> f64 {
 
 // Vec3 implementation
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Vec3 {
     data: [f64; 3],
 }
@@ -65,9 +65,10 @@ impl Vec3 {
     pub fn rand_in_unit_sphere() -> Vec3 {
         loop {
             let p = Vec3::rand_range(-1.0, 1.0);
-            if p.length_squared() < 1.0 {
-                return p;
+            if p.length_squared() >= 1.0 {
+                continue;
             }
+            return p;
         }
     }
 
@@ -82,6 +83,11 @@ impl Vec3 {
         } else {
             -in_unit_sphere
         }
+    }
+
+    pub fn near_zero(&self) -> bool {
+        let s = 1.0e-8;
+        (self[0].abs() < s) && (self[1] < s) && (self[2] < s)
     }
 }
 
@@ -190,6 +196,46 @@ impl Mul<f64> for Vec3 {
     }
 }
 
+impl Mul<Vec3> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, other: Vec3) -> Vec3 {
+        Vec3 {
+            data: [self[0] * other[0], self[1] * other[1], self[2] * other[2]],
+        }
+    }
+}
+
+impl<'a> Mul<Vec3> for &'a Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, other: Vec3) -> Vec3 {
+        Vec3 {
+            data: [self[0] * other[0], self[1] * other[1], self[2] * other[2]],
+        }
+    }
+}
+
+impl<'a> Mul<&'a Vec3> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, other: &'a Vec3) -> Vec3 {
+        Vec3 {
+            data: [self[0] * other[0], self[1] * other[1], self[2] * other[2]],
+        }
+    }
+}
+
+impl<'a, 'b> Mul<&'b Vec3> for &'a Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, other: &'b Vec3) -> Vec3 {
+        Vec3 {
+            data: [self[0] * other[0], self[1] * other[1], self[2] * other[2]],
+        }
+    }
+}
+
 impl<'a> Div<f64> for &'a Vec3 {
     type Output = Vec3;
     fn div(self, other: f64) -> Vec3 {
@@ -239,6 +285,10 @@ pub fn cross(a: &Vec3, b: &Vec3) -> Vec3 {
 
 pub fn unit_vector(v: &Vec3) -> Vec3 {
     v / v.length()
+}
+
+pub fn reflect(v: &Vec3, n: &Vec3) -> Vec3 {
+    v - (n * (dot(v, n) * 2.0))
 }
 
 pub type Color = Vec3;

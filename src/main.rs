@@ -157,7 +157,7 @@ fn ray_color<T: Hittable>(r: Ray, world: T, depth: u32) -> Color {
     }
     let rec = world.hit(&r, 0.001, INFINITY);
     if rec.hit {
-        let target = &rec.p + &rec.normal + Vec3::rand_in_unit_sphere();
+        let target = &rec.p + &rec.normal + Vec3::rand_unit_vector();
         return ray_color(Ray::of(rec.p.clone(), target - &rec.p), world, depth - 1) * 0.5;
     }
     let unit_direction = unit_vector(&r.direction);
@@ -242,16 +242,6 @@ fn main() {
                 pixel_color = &pixel_color + &ray_color(r, &world, max_depth);
             }
             write_color(pixel_color, samples_per_pixel);
-            // let world = world.as_mut_slice().to_vec();
-            // let u = i as f64 / (image_width - 1) as f64;
-            // let v = j as f64 / (image_height - 1) as f64;
-            // let r = Ray::of(
-            //     origin.clone(),
-            //     lower_left_corner.clone() + (horizontal.clone() * u) + (vertical.clone() * v)
-            //         - origin.clone(),
-            // );
-            // let pixel_color = ray_color(r, world);
-            // write_color(pixel_color);
         }
     }
     eprintln!("Done.\n");

@@ -70,6 +70,10 @@ impl Vec3 {
             }
         }
     }
+
+    pub fn rand_unit_vector() -> Vec3 {
+        unit_vector(&Vec3::rand_in_unit_sphere())
+    }
 }
 
 impl Index<usize> for Vec3 {

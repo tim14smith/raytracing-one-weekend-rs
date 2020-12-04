@@ -74,6 +74,15 @@ impl Vec3 {
     pub fn rand_unit_vector() -> Vec3 {
         unit_vector(&Vec3::rand_in_unit_sphere())
     }
+
+    pub fn random_in_hemisphere(normal: &Vec3) -> Vec3 {
+        let in_unit_sphere = Vec3::rand_in_unit_sphere();
+        if dot(&in_unit_sphere, normal) > 0.0 {
+            in_unit_sphere
+        } else {
+            -in_unit_sphere
+        }
+    }
 }
 
 impl Index<usize> for Vec3 {

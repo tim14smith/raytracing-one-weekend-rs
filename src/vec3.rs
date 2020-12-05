@@ -1,6 +1,7 @@
 use rand::prelude::*;
 use rand::thread_rng;
 use std::fmt;
+use std::iter::Sum;
 use std::ops::{Add, Div, Index, Mul, Neg, Sub};
 
 pub fn random_f64() -> f64 {
@@ -98,6 +99,12 @@ impl Vec3 {
             }
             return p;
         }
+    }
+}
+
+impl Sum<Vec3> for Vec3 {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Vec3::new(), Add::add)
     }
 }
 

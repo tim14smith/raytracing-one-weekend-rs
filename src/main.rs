@@ -29,6 +29,8 @@ impl Ray {
     }
 }
 
+type MatPtr = Option<Box<dyn Material>>;
+
 trait MatClone {
     fn clone_box(&self) -> Box<dyn Material>;
 }
@@ -156,8 +158,6 @@ impl Material for Metal {
         dot(&scattered.direction, &rec.normal) > 0.0
     }
 }
-
-type MatPtr = Option<Box<dyn Material>>;
 
 #[derive(Clone)]
 struct HitRecord {
@@ -297,7 +297,7 @@ fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
     }
 }
 
-fn ray_color<T: Hittable>(r: Ray, world: T, depth: u32) -> Color {
+fn ray_color<T: Hittable>(r: Ray, world: &T, depth: u32) -> Color {
     let rec: &mut HitRecord = &mut HitRecord::default();
 
     if depth <= 0 {
@@ -390,20 +390,91 @@ fn get_ray(cam: &Camera, s: f64, t: f64) -> Ray {
     }
 }
 
+fn random_scene() -> Vec<Sphere> {
+    let mut world = Vec::new();
+
+    let ground_material = Lambertian {
+        albedo: Color::of(0.5, 0.5, 0.5),
+    };
+    world.push(Sphere {
+        center: Vec3::of(0.0, -1000.0, 0.0),
+        mat_ptr: Some(Box::new(ground_material)),
+        radius: 1000.0,
+    });
+
+    for a in -11..11 {
+        for b in -11..11 {
+            let choose_mat = random_f64();
+            let center = Point3::of(
+                a as f64 + 0.9 * random_f64(),
+                0.2,
+                b as f64 + 0.9 * random_f64(),
+            );
+
+            if (&center - Point3::of(4.0, 0.2, 0.0)).length() > 0.9 {
+                if choose_mat < 0.8 {
+                    let albedo = Color::rand() * Color::rand();
+                    world.push(Sphere {
+                        center: center,
+                        radius: 0.2,
+                        mat_ptr: Some(Box::new(Lambertian { albedo: albedo })),
+                    });
+                } else if choose_mat < 0.95 {
+                    let albedo = Color::rand_range(0.5, 1.0);
+                    let fuzz = random_float(0.0, 0.5);
+                    world.push(Sphere {
+                        center: center,
+                        radius: 0.2,
+                        mat_ptr: Some(Box::new(Metal::new(albedo, fuzz))),
+                    })
+                } else {
+                    world.push(Sphere {
+                        center: center,
+                        radius: 0.2,
+                        mat_ptr: Some(Box::new(Dielectric { ir: 1.5 })),
+                    })
+                }
+            }
+        }
+    }
+
+    world.push(Sphere {
+        center: Point3::of(0.0, 1.0, 0.0),
+        radius: 1.0,
+        mat_ptr: Some(Box::new(Dielectric { ir: 1.5 })),
+    });
+
+    world.push(Sphere {
+        center: Point3::of(-4.0, 1.0, 0.0),
+        radius: 1.0,
+        mat_ptr: Some(Box::new(Lambertian {
+            albedo: Color::of(0.4, 0.2, 0.1),
+        })),
+    });
+
+    world.push(Sphere {
+        center: Point3::of(4.0, 1.0, 0.0),
+        radius: 1.0,
+        mat_ptr: Some(Box::new(Metal::new(Color::of(0.7, 0.6, 0.5), 0.0))),
+    });
+
+    world
+}
+
 fn main() {
     // Image
     let aspect_ratio = 16.0 / 9.0;
-    let image_width = 400;
+    let image_width = 1600;
     let image_height = (image_width as f64 / aspect_ratio) as i32;
-    let samples_per_pixel = 100;
+    let samples_per_pixel = 500;
     let max_depth = 50;
 
     // Camera
-    let lookfrom = Point3::of(3.0, 3.0, 2.0);
-    let lookat = Point3::of(0.0, 0.0, -1.0);
+    let lookfrom = Point3::of(13.0, 2.0, 3.0);
+    let lookat = Point3::of(0.0, 0.0, 0.0);
     let vup = Vec3::of(0.0, 1.0, 0.0);
-    let dist_to_focus = (lookfrom - lookat).length();
-    let aperture = 2.0;
+    let dist_to_focus = 10.0;
+    let aperture = 1.0;
     let fov = 20.0;
     let cam = Camera::new(
         lookfrom,
@@ -415,55 +486,33 @@ fn main() {
         dist_to_focus,
     );
 
+    // World
+    let world = random_scene();
+
     println!("P3\n{} {}\n255", image_width, image_height);
 
     for j1 in 0..image_height {
         let j = image_height - j1 - 1;
         eprintln!("\rScanlines remaining {} ", j);
         for i in 0..image_width {
-            let mut pixel_color = Color::of(0.0, 0.0, 0.0);
-            for _ in 0..samples_per_pixel {
-                // World
-                let material_ground = Lambertian {
-                    albedo: Color::of(0.8, 0.8, 0.0),
-                };
-                let material_center = Lambertian {
-                    albedo: Color::of(0.1, 0.2, 0.5),
-                };
-                let material_left = Dielectric { ir: 1.5 };
-                let material_right = Metal::new(Color::of(0.8, 0.6, 0.2), 0.0);
-                let world = vec![
-                    Sphere {
-                        center: Point3::of(0.0, -100.5, -1.0),
-                        radius: 100.0,
-                        mat_ptr: Some(Box::new(material_ground)),
-                    },
-                    Sphere {
-                        center: Point3::of(0.0, 0.0, -1.0),
-                        radius: 0.5,
-                        mat_ptr: Some(Box::new(material_center)),
-                    },
-                    Sphere {
-                        center: Point3::of(-1.0, 0.0, -1.0),
-                        radius: 0.5,
-                        mat_ptr: Some(Box::new(material_left)),
-                    },
-                    Sphere {
-                        center: Point3::of(-1.0, 0.0, -1.0),
-                        radius: -0.45,
-                        mat_ptr: Some(Box::new(material_left)),
-                    },
-                    Sphere {
-                        center: Point3::of(1.0, 0.0, -1.0),
-                        radius: 0.5,
-                        mat_ptr: Some(Box::new(material_right)),
-                    },
-                ];
-                let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
-                let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
-                let r = get_ray(&cam, u, v);
-                pixel_color = &pixel_color + &ray_color(r, world, max_depth);
-            }
+            let pixel_color = (0..samples_per_pixel)
+                .into_iter()
+                .map(|_| {
+                    let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
+                    let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
+                    let r = get_ray(&cam, u, v);
+                    ray_color(r, &world, max_depth)
+                })
+                .sum();
+
+            // let mut pixel_color = Color::of(0.0, 0.0, 0.0);
+            // for _ in 0..samples_per_pixel {
+            //     let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
+            //     let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
+            //     let r = get_ray(&cam, u, v);
+            //     pixel_color = &pixel_color + &ray_color(r, &world, max_depth);
+            // }
+
             write_color(pixel_color, samples_per_pixel);
         }
     }

@@ -273,12 +273,12 @@ pub fn dot(a: &Vec3, b: &Vec3) -> f64 {
     (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2])
 }
 
-pub fn cross(a: &Vec3, b: &Vec3) -> Vec3 {
+pub fn cross(u: &Vec3, v: &Vec3) -> Vec3 {
     Vec3 {
         data: [
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[0],
-            a[0] * b[1] - b[1] * a[0],
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
         ],
     }
 }

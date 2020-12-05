@@ -337,31 +337,38 @@ struct Camera {
 }
 
 impl Camera {
-    pub fn new() -> Camera {
-        let aspect_ratio = 16.0 / 9.0;
-        let viewport_height = 2.0;
+    pub fn new(
+        lookfrom: Point3,
+        lookat: Point3,
+        vup: Vec3,
+        vfov: f64,
+        aspect_ratio: f64,
+    ) -> Camera {
+        let theta = degrees_to_radians(vfov);
+        let h = (theta / 2.0).tan();
+        let viewport_height = 2.0 * h;
         let viewport_width = aspect_ratio * viewport_height;
-        let focal_length = 1.0;
 
-        let origin = Point3::new();
-        let horizontal = Vec3::of(viewport_width, 0.0, 0.0);
-        let vertical = Vec3::of(0.0, viewport_height, 0.0);
+        let w = unit_vector(&(lookfrom - lookat));
+        let u = unit_vector(&cross(&vup, &w));
+        let v = cross(&w, &u);
+
+        let origin = lookfrom;
+        let horizontal = u * viewport_width;
+        let vertical = v * viewport_height;
         Camera {
-            origin: Point3::new(),
-            horizontal: Vec3::of(viewport_width, 0.0, 0.0),
-            vertical: Vec3::of(0.0, viewport_height, 0.0),
-            lower_left_corner: &origin
-                - (&horizontal / 2.0)
-                - (&vertical / 2.0)
-                - &Vec3::of(0.0, 0.0, focal_length),
+            origin: lookfrom,
+            horizontal: horizontal,
+            vertical: vertical,
+            lower_left_corner: &origin - (&horizontal / 2.0) - (&vertical / 2.0) - w,
         }
     }
 }
 
-fn get_ray(cam: &Camera, u: f64, v: f64) -> Ray {
+fn get_ray(cam: &Camera, s: f64, t: f64) -> Ray {
     Ray {
         origin: cam.origin.clone(),
-        direction: &cam.lower_left_corner + (&cam.horizontal * u) + (&cam.vertical * v)
+        direction: &cam.lower_left_corner + (&cam.horizontal * s) + (&cam.vertical * t)
             - &cam.origin,
     }
 }
@@ -375,7 +382,13 @@ fn main() {
     let max_depth = 50;
 
     // Camera
-    let cam = Camera::new();
+    let cam = Camera::new(
+        Point3::of(-2.0, 2.0, 1.0),
+        Point3::of(0.0, 0.0, -1.0),
+        Vec3::of(0.0, 1.0, 0.0),
+        20.0,
+        aspect_ratio,
+    );
 
     println!("P3\n{} {}\n255", image_width, image_height);
 
@@ -412,7 +425,7 @@ fn main() {
                     },
                     Sphere {
                         center: Point3::of(-1.0, 0.0, -1.0),
-                        radius: -0.4,
+                        radius: -0.45,
                         mat_ptr: Some(Box::new(material_left)),
                     },
                     Sphere {

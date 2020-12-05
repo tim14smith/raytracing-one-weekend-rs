@@ -64,6 +64,13 @@ struct Dielectric {
     ir: f64,
 }
 
+impl Dielectric {
+    fn reflectance(cosine: f64, ref_idx: f64) -> f64 {
+        let r0 = ((1.0 - ref_idx) / (1.0 + ref_idx)).powi(2);
+        r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
+    }
+}
+
 impl Material for Dielectric {
     fn scatter(
         &self,
@@ -80,9 +87,19 @@ impl Material for Dielectric {
         };
 
         let unit_direction = unit_vector(&r_in.direction);
-        let refracted = refract(&unit_direction, &rec.normal, refraction_ratio);
+        let cos_theta = dot(&-unit_direction, &rec.normal).min(1.0);
+        let sin_theta = (1.0 - (cos_theta * cos_theta)).sqrt();
 
-        *scattered = Ray::of(rec.p, refracted);
+        let cannot_refract = (refraction_ratio * sin_theta) > 1.0;
+        let direction: Vec3;
+
+        if cannot_refract || Dielectric::reflectance(cos_theta, refraction_ratio) > random_f64() {
+            direction = reflect(&unit_direction, &rec.normal);
+        } else {
+            direction = refract(&unit_direction, &rec.normal, refraction_ratio);
+        }
+
+        *scattered = Ray::of(rec.p, direction);
         true
     }
 }
@@ -372,9 +389,11 @@ fn main() {
                 let material_ground = Lambertian {
                     albedo: Color::of(0.8, 0.8, 0.0),
                 };
-                let material_center = Dielectric { ir: 1.5 };
+                let material_center = Lambertian {
+                    albedo: Color::of(0.1, 0.2, 0.5),
+                };
                 let material_left = Dielectric { ir: 1.5 };
-                let material_right = Metal::new(Color::of(0.8, 0.6, 0.2), 1.0);
+                let material_right = Metal::new(Color::of(0.8, 0.6, 0.2), 0.0);
                 let world = vec![
                     Sphere {
                         center: Point3::of(0.0, -100.5, -1.0),
@@ -389,6 +408,11 @@ fn main() {
                     Sphere {
                         center: Point3::of(-1.0, 0.0, -1.0),
                         radius: 0.5,
+                        mat_ptr: Some(Box::new(material_left)),
+                    },
+                    Sphere {
+                        center: Point3::of(-1.0, 0.0, -1.0),
+                        radius: -0.4,
                         mat_ptr: Some(Box::new(material_left)),
                     },
                     Sphere {

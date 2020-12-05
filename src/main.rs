@@ -60,6 +60,34 @@ trait Material: MatClone {
 }
 
 #[derive(Clone, Copy)]
+struct Dielectric {
+    ir: f64,
+}
+
+impl Material for Dielectric {
+    fn scatter(
+        &self,
+        r_in: &Ray,
+        rec: &HitRecord,
+        attenuation: &mut Color,
+        scattered: &mut Ray,
+    ) -> bool {
+        *attenuation = Color::of(1.0, 1.0, 1.0);
+        let refraction_ratio = if rec.front_face {
+            1.0 / self.ir
+        } else {
+            self.ir
+        };
+
+        let unit_direction = unit_vector(&r_in.direction);
+        let refracted = refract(&unit_direction, &rec.normal, refraction_ratio);
+
+        *scattered = Ray::of(rec.p, refracted);
+        true
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Lambertian {
     albedo: Color,
 }
@@ -344,10 +372,8 @@ fn main() {
                 let material_ground = Lambertian {
                     albedo: Color::of(0.8, 0.8, 0.0),
                 };
-                let material_center = Lambertian {
-                    albedo: Color::of(0.7, 0.3, 0.3),
-                };
-                let material_left = Metal::new(Color::of(0.8, 0.8, 0.8), 0.3);
+                let material_center = Dielectric { ir: 1.5 };
+                let material_left = Dielectric { ir: 1.5 };
                 let material_right = Metal::new(Color::of(0.8, 0.6, 0.2), 1.0);
                 let world = vec![
                     Sphere {

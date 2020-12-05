@@ -89,6 +89,16 @@ impl Vec3 {
         let s = 1.0e-8;
         (self[0].abs() < s) && (self[1] < s) && (self[2] < s)
     }
+
+    pub fn random_in_unit_disk() -> Vec3 {
+        loop {
+            let p = Vec3::of(random_float(-1.0, 1.0), random_float(-1.0, 1.0), 0.0);
+            if p.length_squared() >= 1.0 {
+                continue;
+            }
+            return p;
+        }
+    }
 }
 
 impl Index<usize> for Vec3 {

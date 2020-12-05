@@ -334,6 +334,10 @@ struct Camera {
     lower_left_corner: Point3,
     horizontal: Vec3,
     vertical: Vec3,
+    u: Vec3,
+    v: Vec3,
+    w: Vec3,
+    lens_radius: f64,
 }
 
 impl Camera {
@@ -343,6 +347,8 @@ impl Camera {
         vup: Vec3,
         vfov: f64,
         aspect_ratio: f64,
+        aperture: f64,
+        focus_dist: f64,
     ) -> Camera {
         let theta = degrees_to_radians(vfov);
         let h = (theta / 2.0).tan();
@@ -354,22 +360,33 @@ impl Camera {
         let v = cross(&w, &u);
 
         let origin = lookfrom;
-        let horizontal = u * viewport_width;
-        let vertical = v * viewport_height;
+        let horizontal = u * viewport_width * focus_dist;
+        let vertical = v * viewport_height * focus_dist;
+        let lower_left_corner =
+            &origin - (&horizontal / 2.0) - (&vertical / 2.0) - (w * focus_dist);
+
+        let lens_radius = aperture / 2.0;
         Camera {
+            u: u,
+            v: v,
+            w: w,
+            lens_radius: lens_radius,
             origin: lookfrom,
             horizontal: horizontal,
             vertical: vertical,
-            lower_left_corner: &origin - (&horizontal / 2.0) - (&vertical / 2.0) - w,
+            lower_left_corner: lower_left_corner,
         }
     }
 }
 
 fn get_ray(cam: &Camera, s: f64, t: f64) -> Ray {
+    let rd = Vec3::random_in_unit_disk() * cam.lens_radius;
+    let offset = (cam.u * rd.x()) + (cam.v * rd.y());
     Ray {
-        origin: cam.origin.clone(),
+        origin: &cam.origin + offset,
         direction: &cam.lower_left_corner + (&cam.horizontal * s) + (&cam.vertical * t)
-            - &cam.origin,
+            - &cam.origin
+            - offset,
     }
 }
 
@@ -382,12 +399,20 @@ fn main() {
     let max_depth = 50;
 
     // Camera
+    let lookfrom = Point3::of(3.0, 3.0, 2.0);
+    let lookat = Point3::of(0.0, 0.0, -1.0);
+    let vup = Vec3::of(0.0, 1.0, 0.0);
+    let dist_to_focus = (lookfrom - lookat).length();
+    let aperture = 2.0;
+    let fov = 20.0;
     let cam = Camera::new(
-        Point3::of(-2.0, 2.0, 1.0),
-        Point3::of(0.0, 0.0, -1.0),
-        Vec3::of(0.0, 1.0, 0.0),
-        20.0,
+        lookfrom,
+        lookat,
+        vup,
+        fov,
         aspect_ratio,
+        aperture,
+        dist_to_focus,
     );
 
     println!("P3\n{} {}\n255", image_width, image_height);

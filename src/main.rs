@@ -1,8 +1,9 @@
 extern crate rand;
+extern crate rayon;
 mod vec3;
+use rayon::prelude::*;
 use std::f64::consts::PI;
 use std::f64::INFINITY;
-use std::option::Option;
 use vec3::*;
 //use vec3::{unit_vector, Color, Point3, Vec3};
 
@@ -28,8 +29,6 @@ impl Ray {
         &self.origin + (&self.direction * t)
     }
 }
-
-type MatPtr = Option<Box<dyn Material>>;
 
 trait MatClone {
     fn clone_box(&self) -> Box<dyn Material>;
@@ -159,11 +158,18 @@ impl Material for Metal {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
+enum Mat {
+    M(Metal),
+    L(Lambertian),
+    D(Dielectric),
+}
+
+#[derive(Clone, Copy)]
 struct HitRecord {
     p: Point3,
     normal: Vec3,
-    mat_ptr: MatPtr,
+    mat_ptr: usize,
     t: f64,
     front_face: bool,
 }
@@ -173,7 +179,7 @@ impl HitRecord {
         HitRecord {
             p: Point3::new(),
             normal: Vec3::new(),
-            mat_ptr: None,
+            mat_ptr: 0, // Default texture
             t: 0.0,
             front_face: false,
         }
@@ -188,11 +194,11 @@ trait Hittable {
 struct Sphere {
     center: Point3,
     radius: f64,
-    mat_ptr: MatPtr,
+    mat_ptr: usize,
 }
 
 impl Sphere {
-    pub fn of(cen: Point3, radius: f64, mat_ptr: MatPtr) -> Sphere {
+    pub fn of(cen: Point3, radius: f64, mat_ptr: usize) -> Sphere {
         Sphere {
             center: cen,
             radius: radius,
@@ -297,7 +303,21 @@ fn hit_sphere(center: Point3, radius: f64, r: Ray) -> f64 {
     }
 }
 
-fn ray_color<T: Hittable>(r: Ray, world: &T, depth: u32) -> Color {
+fn scatter_mat(
+    m: Mat,
+    r_in: &Ray,
+    rec: &HitRecord,
+    attenuation: &mut Color,
+    scattered: &mut Ray,
+) -> bool {
+    match m {
+        Mat::M(x) => x.scatter(r_in, rec, attenuation, scattered),
+        Mat::D(x) => x.scatter(r_in, rec, attenuation, scattered),
+        Mat::L(x) => x.scatter(r_in, rec, attenuation, scattered),
+    }
+}
+
+fn ray_color<T: Hittable>(r: Ray, world: &T, depth: u32, materials: &Vec<Mat>) -> Color {
     let rec: &mut HitRecord = &mut HitRecord::default();
 
     if depth <= 0 {
@@ -308,15 +328,8 @@ fn ray_color<T: Hittable>(r: Ray, world: &T, depth: u32) -> Color {
         let mut scattered = Ray::new();
         let mut attenuation = Color::new();
         let mat = rec.clone().mat_ptr;
-        match mat {
-            None => {
-                println!("NO MATERIAL for {}, {}", r.origin, r.direction);
-            }
-            Some(x) => {
-                if x.scatter(&r, &rec, &mut attenuation, &mut scattered) {
-                    return attenuation * ray_color(scattered, world, depth - 1);
-                }
-            }
+        if scatter_mat(materials[mat], &r, &rec, &mut attenuation, &mut scattered) {
+            return attenuation * ray_color(scattered, world, depth - 1, materials);
         }
         return Color::of(0.0, 0.0, 0.0);
     }
@@ -390,15 +403,19 @@ fn get_ray(cam: &Camera, s: f64, t: f64) -> Ray {
     }
 }
 
-fn random_scene() -> Vec<Sphere> {
+fn random_scene() -> (Vec<Sphere>, Vec<Mat>) {
+    let mut materials: Vec<Mat> = vec![];
     let mut world = Vec::new();
 
-    let ground_material = Lambertian {
+    let ground_material = Mat::L(Lambertian {
         albedo: Color::of(0.5, 0.5, 0.5),
-    };
+    });
+
+    let mut p = 0 as usize;
+    materials.push(ground_material);
     world.push(Sphere {
         center: Vec3::of(0.0, -1000.0, 0.0),
-        mat_ptr: Some(Box::new(ground_material)),
+        mat_ptr: p, // ground_material
         radius: 1000.0,
     });
 
@@ -414,59 +431,71 @@ fn random_scene() -> Vec<Sphere> {
             if (&center - Point3::of(4.0, 0.2, 0.0)).length() > 0.9 {
                 if choose_mat < 0.8 {
                     let albedo = Color::rand() * Color::rand();
+                    materials.push(Mat::L(Lambertian { albedo: albedo }));
+                    p += 1;
                     world.push(Sphere {
                         center: center,
                         radius: 0.2,
-                        mat_ptr: Some(Box::new(Lambertian { albedo: albedo })),
+                        mat_ptr: p,
                     });
                 } else if choose_mat < 0.95 {
                     let albedo = Color::rand_range(0.5, 1.0);
                     let fuzz = random_float(0.0, 0.5);
+                    materials.push(Mat::M(Metal::new(albedo, fuzz)));
+                    p += 1;
                     world.push(Sphere {
                         center: center,
                         radius: 0.2,
-                        mat_ptr: Some(Box::new(Metal::new(albedo, fuzz))),
+                        mat_ptr: p,
                     })
                 } else {
+                    materials.push(Mat::D(Dielectric { ir: 1.5 }));
+                    p += 1;
                     world.push(Sphere {
                         center: center,
                         radius: 0.2,
-                        mat_ptr: Some(Box::new(Dielectric { ir: 1.5 })),
+                        mat_ptr: p,
                     })
                 }
             }
         }
     }
 
+    materials.push(Mat::D(Dielectric { ir: 1.5 }));
+    p += 1;
     world.push(Sphere {
         center: Point3::of(0.0, 1.0, 0.0),
         radius: 1.0,
-        mat_ptr: Some(Box::new(Dielectric { ir: 1.5 })),
+        mat_ptr: p,
     });
 
+    materials.push(Mat::L(Lambertian {
+        albedo: Color::of(0.4, 0.2, 0.1),
+    }));
+    p += 1;
     world.push(Sphere {
         center: Point3::of(-4.0, 1.0, 0.0),
         radius: 1.0,
-        mat_ptr: Some(Box::new(Lambertian {
-            albedo: Color::of(0.4, 0.2, 0.1),
-        })),
+        mat_ptr: p,
     });
 
+    materials.push(Mat::M(Metal::new(Color::of(0.7, 0.6, 0.5), 0.0)));
+    p += 1;
     world.push(Sphere {
         center: Point3::of(4.0, 1.0, 0.0),
         radius: 1.0,
-        mat_ptr: Some(Box::new(Metal::new(Color::of(0.7, 0.6, 0.5), 0.0))),
+        mat_ptr: p,
     });
 
-    world
+    (world, materials)
 }
 
 fn main() {
     // Image
     let aspect_ratio = 16.0 / 9.0;
-    let image_width = 1600;
+    let image_width = 800;
     let image_height = (image_width as f64 / aspect_ratio) as i32;
-    let samples_per_pixel = 500;
+    let samples_per_pixel = 50;
     let max_depth = 50;
 
     // Camera
@@ -487,32 +516,31 @@ fn main() {
     );
 
     // World
-    let world = random_scene();
+    let (world, materials) = random_scene();
 
     println!("P3\n{} {}\n255", image_width, image_height);
 
     for j1 in 0..image_height {
         let j = image_height - j1 - 1;
         eprintln!("\rScanlines remaining {} ", j);
-        for i in 0..image_width {
-            let pixel_color = (0..samples_per_pixel)
-                .into_iter()
-                .map(|_| {
-                    let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
-                    let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
-                    let r = get_ray(&cam, u, v);
-                    ray_color(r, &world, max_depth)
-                })
-                .sum();
-
-            // let mut pixel_color = Color::of(0.0, 0.0, 0.0);
-            // for _ in 0..samples_per_pixel {
-            //     let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
-            //     let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
-            //     let r = get_ray(&cam, u, v);
-            //     pixel_color = &pixel_color + &ray_color(r, &world, max_depth);
-            // }
-
+        let mut colors: Vec<_> = (0..image_width)
+            .into_par_iter()
+            .map(|i| -> (i32, Color) {
+                let pixel_color: Color = (0..samples_per_pixel)
+                    .into_par_iter()
+                    .map(|_| {
+                        let u = (i as f64 + random_f64()) / (image_width - 1) as f64;
+                        let v = (j as f64 + random_f64()) / (image_height - 1) as f64;
+                        let r = get_ray(&cam, u, v);
+                        ray_color(r, &world, max_depth, &materials)
+                    })
+                    .sum();
+                (i, pixel_color)
+            })
+            .collect();
+        colors.sort_by(|(x, _), (y, _)| x.cmp(y));
+        //eprintln!("{:?}", colors);
+        for (_, pixel_color) in colors {
             write_color(pixel_color, samples_per_pixel);
         }
     }

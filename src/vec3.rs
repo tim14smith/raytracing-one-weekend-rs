@@ -14,7 +14,7 @@ pub fn random_float(min: f64, max: f64) -> f64 {
 
 // Vec3 implementation
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Vec3 {
     data: [f64; 3],
 }

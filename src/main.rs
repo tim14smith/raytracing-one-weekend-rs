@@ -503,7 +503,7 @@ fn main() {
     let lookat = Point3::of(0.0, 0.0, 0.0);
     let vup = Vec3::of(0.0, 1.0, 0.0);
     let dist_to_focus = 10.0;
-    let aperture = 1.0;
+    let aperture = 0.1;
     let fov = 20.0;
     let cam = Camera::new(
         lookfrom,
